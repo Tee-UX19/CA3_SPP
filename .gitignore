@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data files (downloaded, not committed)
+data/*
+!data/.gitkeep
+
+# Results (generated output, not committed)
+results/raw/*
+!results/raw/.gitkeep
+results/plots/*
+!results/plots/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
