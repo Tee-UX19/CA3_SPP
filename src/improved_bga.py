@@ -183,6 +183,7 @@ def run(problem, params, seed=None):
         "history":            history
     }
 
+#note that unlike the other files, we run this on each dataset separately. so python src/improved_bga.py sppnw41, then python src/improved_bga.py sppnw42, etc.
 
 if __name__ == "__main__":
     import sys, os, time
