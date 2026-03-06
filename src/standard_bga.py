@@ -90,30 +90,51 @@ def run(problem, params, seed=None):
 
 
 if __name__ == "__main__":
-    import sys
+    import sys, os, time
     sys.path.append(".")
     from src.parser import parse_file
     from src.spp import SPP
 
     params = {
-        'pop_size':       200,
-        'max_iter':       100000,
-        'lambda_penalty': None,   # set per-problem below
+        'pop_size': 200,
+        'max_iter': 100000,
+        'lambda_penalty': None,
     }
+
+    os.makedirs("results/raw", exist_ok=True)
 
     for dataset in ['sppnw41', 'sppnw42', 'sppnw43']:
         data    = parse_file(f"data/{dataset}.txt")
         problem = SPP(**data)
+        params['lambda_penalty'] = float(np.mean(problem.costs) * 1.5)
 
-        # lambda scales with mean cost — same multiplier across all datasets
-        params['lambda_penalty'] = float(np.mean(problem.costs) * 3.0)
+        costs          = []
         feasible_count = 0
-        costs = []
-        for i in range(10):
-            r = run(problem, params, seed=i)
-            if r['feasible']:
-                feasible_count += 1
-                costs.append(r['best_feasible_cost'])
+        out_file       = f"results/raw/standard_bga_{dataset}.txt"
 
-        mean_str = f"mean cost: {np.mean(costs):.1f}" if costs else "no feasible"
-        print(f"{dataset}: {feasible_count}/10 feasible, {mean_str}")
+        with open(out_file, "w") as f:
+            f.write(f"algorithm=standard_bga, dataset={dataset}, "
+                    f"pop_size={params['pop_size']}, "
+                    f"max_iter={params['max_iter']}, "
+                    f"lambda={params['lambda_penalty']:.1f}\n\n")
+
+            for seed in range(30):
+                start = time.time()
+                r     = run(problem, params, seed=seed)
+                cost  = r['best_feasible_cost'] if r['feasible'] else float('inf')
+                costs.append(cost)
+                if r['feasible']:
+                    feasible_count += 1
+
+                line = (f"seed={seed:02d}, cost={cost:.1f}, "
+                        f"feasible={r['feasible']}, time={time.time()-start:.1f}s")
+                print(line, flush=True)
+                f.write(line + "\n")
+                f.flush()
+
+            summary = (f"\nmean={np.mean(costs):.1f}, std={np.std(costs):.1f}, "
+                       f"feasible={feasible_count}/30")
+            print(summary)
+            f.write(summary + "\n")
+
+        print(f"Saved to {out_file}\n")
