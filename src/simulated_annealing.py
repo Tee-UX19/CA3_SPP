@@ -6,14 +6,14 @@ def run(problem,params,seed=None):
     if seed is not None:
         np.random.seed(seed)
     
-    #unpacking parameters
+    
     T = params['T']
     alpha = params['alpha']
     max_iter = params['max_iter']
     lambda_penalty = params['lambda_penalty']
     
     n= problem.num_cols
-    current= np.random.randint(2, size=n)  # Random initial solution
+    current= np.random.randint(2, size=n)  
     current_score= problem.evaluate(current) + lambda_penalty * problem.penalty(current)
     
     best= current.copy()
@@ -26,7 +26,7 @@ def run(problem,params,seed=None):
     for i in range(max_iter):
         neighbor= current.copy()
         flip_index= np.random.randint(0,n)
-        neighbor[flip_index] = 1 - neighbor[flip_index]  # Flip a random bit
+        neighbor[flip_index] = 1 - neighbor[flip_index] 
         neighbor_score= problem.evaluate(neighbor) + lambda_penalty * problem.penalty(neighbor)
         
         delta = neighbor_score - current_score
@@ -59,29 +59,51 @@ def run(problem,params,seed=None):
     }
     
 if __name__ == "__main__":
-    import sys
+    import sys, os, time
     sys.path.append(".")
     from src.parser import parse_file
     from src.spp import SPP
 
+    os.makedirs("results/raw", exist_ok=True)
+
     for dataset in ['sppnw41', 'sppnw42', 'sppnw43']:
-        data = parse_file(f"data/{dataset}.txt")
+        data    = parse_file(f"data/{dataset}.txt")
         problem = SPP(**data)
 
         params = {
-            'T': 10000.0,
-            'alpha': 0.9999,
-            'max_iter': 500000,
+            'T':              10000.0,
+            'alpha':          0.9999,
+            'max_iter':       300000,
             'lambda_penalty': float(np.mean(problem.costs) * 1.5)
         }
 
+        costs          = []
         feasible_count = 0
-        costs = []
-        for i in range(10):
-            r = run(problem, params, seed=i)
-            if r['feasible']:
-                feasible_count += 1
-                costs.append(r['best_feasible_cost'])
+        out_file       = f"results/raw/sa_{dataset}.txt"
 
-        print(f"{dataset}: {feasible_count}/10 feasible, "
-              f"mean cost: {np.mean(costs):.1f}" if costs else f"{dataset}: no feasible")
+        with open(out_file, "w") as f:
+            f.write(f"algorithm=sa, dataset={dataset}, "
+                    f"T={params['T']}, alpha={params['alpha']}, "
+                    f"max_iter={params['max_iter']}, "
+                    f"lambda={params['lambda_penalty']:.1f}\n\n")
+
+            for seed in range(30):
+                start = time.time()
+                r     = run(problem, params, seed=seed)
+                cost  = r['best_feasible_cost'] if r['feasible'] else float('inf')
+                costs.append(cost)
+                if r['feasible']:
+                    feasible_count += 1
+
+                line = (f"seed={seed:02d}, cost={cost:.1f}, "
+                        f"feasible={r['feasible']}, time={time.time()-start:.1f}s")
+                print(line, flush=True)
+                f.write(line + "\n")
+                f.flush()
+
+            summary = (f"\nmean={np.mean(costs):.1f}, std={np.std(costs):.1f}, "
+                       f"feasible={feasible_count}/30")
+            print(summary)
+            f.write(summary + "\n")
+
+        print(f"Saved to {out_file}\n")
