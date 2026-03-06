@@ -8,29 +8,25 @@ def pseudo_random_init(problem, pop_size):
 
     for p in range(pop_size):
         solution  = np.zeros(n, dtype=int)
-        U         = set(range(m))          # uncovered rows
+        U         = set(range(m))         
 
         while U:
-            # Step 1: randomly select an uncovered row
             i = np.random.choice(list(U))
 
-            # Step 2: find columns covering row i that ONLY cover uncovered rows
             cols_covering_i = np.where(problem.matrix[i, :] == 1)[0]
             candidates = []
             for j in cols_covering_i:
                 if solution[j] == 0:
                     rows_of_j = set(np.where(problem.matrix[:, j] == 1)[0])
-                    if rows_of_j.issubset(U):   # β_j ⊆ U — no already-covered rows
+                    if rows_of_j.issubset(U):  
                         candidates.append(j)
 
             if candidates:
-                # randomly select from valid candidates (Algorithm 2 says random)
                 j = np.random.choice(candidates)
                 solution[j] = 1
                 covered = set(np.where(problem.matrix[:, j] == 1)[0])
                 U -= covered
             else:
-                # no safe column exists for this row — skip it
                 U.remove(i)
 
         population[p] = solution
@@ -40,7 +36,6 @@ def heuristic_improvement(problem, solution):
     sol      = solution.copy()
     coverage = problem.matrix @ sol
 
-    # --- Phase 1: DROP — remove redundant columns in random order ---
     selected = list(np.where(sol == 1)[0])
     np.random.shuffle(selected)
     for j in selected:
@@ -49,28 +44,25 @@ def heuristic_improvement(problem, solution):
             sol[j]    = 0
             coverage -= problem.matrix[:, j]
 
-    # --- Phase 2: ADD — fix uncovered rows ---
     U         = set(np.where(coverage == 0)[0])
     V         = list(U)
     np.random.shuffle(V)
 
     for i in V:
         if i not in U:
-            continue   # already covered by a previously added column
+            continue 
 
-        # find columns covering row i that only touch uncovered rows
         cols_i     = np.where(problem.matrix[i, :] == 1)[0]
         candidates = []
         for j in cols_i:
             if sol[j] == 0:
                 rows_j = set(np.where(problem.matrix[:, j] == 1)[0])
-                if rows_j.issubset(U):   # β_j ⊆ U
+                if rows_j.issubset(U):   
                     candidates.append(j)
 
         if not candidates:
             continue
 
-        # pick by best cost ratio c_j / |β_j ∩ U|
         best_j    = None
         best_ratio = np.inf
         for j in candidates:
@@ -90,8 +82,6 @@ def heuristic_improvement(problem, solution):
 
 
 def stochastic_ranking(fitness, unfitness, Pf=0.45):
-    """Runarsson & Yao bubble sort ranking.
-    Returns indices sorted by stochastic rank — index 0 is best."""
     n       = len(fitness)
     indices = np.arange(n)
 
@@ -101,13 +91,11 @@ def stochastic_ranking(fitness, unfitness, Pf=0.45):
             a, b = indices[i], indices[i + 1]
             u    = np.random.random()
 
-            # both feasible OR random chance → compare by fitness (cost)
             if (unfitness[a] == 0 and unfitness[b] == 0) or u < Pf:
                 if fitness[a] > fitness[b]:
                     indices[i], indices[i + 1] = b, a
                     swapped = True
             else:
-                # compare by unfitness (penalty)
                 if unfitness[a] > unfitness[b]:
                     indices[i], indices[i + 1] = b, a
                     swapped = True
@@ -128,10 +116,8 @@ def run(problem, params, seed=None):
     n        = problem.num_cols
     m        = problem.num_rows
 
-    # Enhancement 1: pseudo-random initialisation
     population = pseudo_random_init(problem, pop_size)
 
-    # evaluate initial population
     fitness   = np.array([float(problem.evaluate(population[i]))
                            for i in range(pop_size)])
     unfitness = np.array([float(problem.penalty(population[i]))
@@ -148,10 +134,8 @@ def run(problem, params, seed=None):
     history = []
 
     for iteration in range(max_iter):
-        # Enhancement 3: stochastic ranking to get selection order
         ranked = stochastic_ranking(fitness, unfitness, Pf)
 
-        # select parents from top half of ranking (tournament within ranked)
         top_half = ranked[:pop_size // 2]
         p1_idx   = top_half[np.random.randint(len(top_half))]
         p2_idx   = top_half[np.random.randint(len(top_half))]
@@ -159,40 +143,33 @@ def run(problem, params, seed=None):
         parent1 = population[p1_idx]
         parent2 = population[p2_idx]
 
-        # uniform crossover
         mask  = np.random.randint(0, 2, size=n)
         child = np.where(mask, parent1, parent2).copy()
 
-        # static mutation
         mut_mask = np.random.random(n) < (1.0 / n)
         child    = np.where(mut_mask, 1 - child, child)
 
-        # adaptive mutation if infeasible
         child_unfit = float(problem.penalty(child))
         if child_unfit > 0:
             adapt_rate = child_unfit / (n * m)
             adapt_mask = np.random.random(n) < adapt_rate
             child      = np.where(adapt_mask, 1 - child, child)
 
-        # Enhancement 2: heuristic improvement
         child = heuristic_improvement(problem, child)
 
-        # skip duplicates
         if any(np.array_equal(child, population[i]) for i in range(pop_size)):
             history.append(best_feasible_cost)
             continue
 
-        # evaluate child
+        
         child_fitness   = float(problem.evaluate(child))
         child_unfitness = float(problem.penalty(child))
 
-        # replace worst in population
         worst = int(np.argmax(unfitness * 1e9 + fitness))
         population[worst] = child
         fitness[worst]    = child_fitness
         unfitness[worst]  = child_unfitness
 
-        # track best feasible
         if child_unfitness == 0 and child_fitness < best_feasible_cost:
             best_feasible      = child.copy()
             best_feasible_cost = child_fitness
@@ -214,7 +191,7 @@ if __name__ == "__main__":
     from src.spp import SPP
 
     dataset = sys.argv[1] if len(sys.argv) > 1 else 'sppnw41'
-    params  = {'pop_size': 100, 'max_iter': 4000, 'Pf': 0.45}
+    params  = {'pop_size': 100, 'max_iter': 20000, 'Pf': 0.45}
 
     data    = parse_file(f"data/{dataset}.txt")
     problem = SPP(**data)
